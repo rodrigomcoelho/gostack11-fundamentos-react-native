@@ -18,34 +18,68 @@ interface Product {
 
 interface CartContext {
   products: Product[];
-  addToCart(item: Product): void;
+  addToCart(item: Omit<Product, 'quantity'>): void;
   increment(id: string): void;
   decrement(id: string): void;
 }
 
 const CartContext = createContext<CartContext | null>(null);
 
+const keyStorage = '@AppGoMarket:products';
+
 const CartProvider: React.FC = ({ children }) => {
   const [products, setProducts] = useState<Product[]>([]);
 
   useEffect(() => {
     async function loadProducts(): Promise<void> {
-      // TODO LOAD ITEMS FROM ASYNC STORAGE
+      const product = await AsyncStorage.getItem(keyStorage);
+
+      if (product) setProducts(JSON.parse(product));
     }
 
     loadProducts();
   }, []);
 
-  const addToCart = useCallback(async product => {
-    // TODO ADD A NEW ITEM TO THE CART
+  useEffect(() => {
+    async function saveInStorage(): Promise<void> {
+      await AsyncStorage.setItem(keyStorage, JSON.stringify(products));
+    }
+    saveInStorage();
+  }, [products]);
+
+  const increment = useCallback(async (id: string) => {
+    setProducts(oldProducts =>
+      oldProducts.map(p => ({
+        ...p,
+        quantity: p.quantity + (p.id === id ? 1 : 0),
+      })),
+    );
   }, []);
 
-  const increment = useCallback(async id => {
-    // TODO INCREMENTS A PRODUCT QUANTITY IN THE CART
-  }, []);
+  const addToCart = useCallback(
+    async (product: Product) => {
+      const productIndex = products.findIndex(prod => prod.id === product.id);
 
-  const decrement = useCallback(async id => {
-    // TODO DECREMENTS A PRODUCT QUANTITY IN THE CART
+      if (productIndex < 0) {
+        setProducts(oldProducts => [
+          ...oldProducts,
+          { ...product, quantity: 1 },
+        ]);
+
+        return;
+      }
+      await increment(product.id);
+    },
+    [increment, products],
+  );
+
+  const decrement = useCallback(async (id: string) => {
+    setProducts(oldProducts =>
+      oldProducts.map(p => {
+        if (p.id === id && p.quantity <= 1) return {} as Product;
+        return { ...p, quantity: p.quantity - (p.id === id ? 1 : 0) };
+      }),
+    );
   }, []);
 
   const value = React.useMemo(
